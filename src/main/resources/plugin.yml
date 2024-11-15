@@ -1,0 +1,14 @@
+name: Chestlogger
+version: '1.0-SNAPSHOT'
+main: de.rettedasplanet.chestlogger.ChestLogger
+api-version: '1.21'
+
+commands:
+  chestlog:
+    description: Check the logs of a chest
+    usage: /<command> check
+    permission: chestlogger.check
+permissions:
+  chestlogger.check:
+    description: Allows checking chest logs
+    default: op
