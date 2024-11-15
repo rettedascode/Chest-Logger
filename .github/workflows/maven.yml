@@ -1,57 +1,58 @@
-# Workflow to build the Java project and create a release on GitHub
-
-name: Java CI and Release
+name: Build and Release ChestLogger
 
 on:
   push:
     branches: [ "main" ]
-    tags: [ "*" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '17'
           distribution: 'temurin'
           cache: maven
 
       - name: Build with Maven
         run: mvn -B package --file pom.xml
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: ChestLogger
-          path: target/ChestLogger.jar
+      - name: Get Latest Tag
+        id: get_latest_tag
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+          echo "Latest tag: $LATEST_TAG"
+          # If no tags are found, start with v1.0.0
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_TAG="v1.0.0"
+          else
+            # Increment the version number
+            NEW_TAG=$(echo $LATEST_TAG | awk -F. -v OFS=. '{$NF += 1 ; print}')
+          fi
+          echo "New tag: $NEW_TAG"
+          echo "::set-output name=new_tag::$NEW_TAG"
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-
-    steps:
-      - name: Download Build Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: ChestLogger
+      - name: Create Tag
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag ${{ steps.get_latest_tag.outputs.new_tag }}
+          git push origin ${{ steps.get_latest_tag.outputs.new_tag }}
 
       - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v1
         with:
-          artifacts: ChestLogger.jar
-          tag: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
+          files: target/ChestLogger.jar
+          tag_name: ${{ steps.get_latest_tag.outputs.new_tag }}
+          name: Release ${{ steps.get_latest_tag.outputs.new_tag }}
           body: |
             ## Changes in this release
             - Add your changelog or release notes here.
-          draft: false
-          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
